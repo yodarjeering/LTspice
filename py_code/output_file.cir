@@ -1,0 +1,8 @@
+R1 VCC N002 777
+L1 N002 N003 777
+C1 0 N003 777
+V_VCC 0 VCC DC 5
+* .directive_placeholder
+.tran 1000m  *ここだけ手動入力
+.backanno
+.end

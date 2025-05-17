@@ -1,0 +1,16 @@
+LTspice 24.0.9 for Windows
+Circuit: R1 VCC N002 777
+Start Time: Sat May 17 13:14:11 2025
+solver = Normal
+Maximum thread count: 8
+tnom = 27
+temp = 27
+method = modified trap
+AsciiRawFile = 1
+WARNING: Node N003 is floating.
+
+WARNING: Less than two connections to node n002.  This node is used by l1.
+WARNING: Less than two connections to node vcc.  This node is used by v_vcc.
+Direct Newton iteration for .op point succeeded.
+Total elapsed time: 0.020 seconds.
+

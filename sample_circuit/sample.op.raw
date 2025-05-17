@@ -1,0 +1,24 @@
+Title: * C:\Users\Owner\Desktop\my_program\kyo-pro\40_LTspice\sample_circuit\sample.asc
+Date: Sat May 17 10:41:00 2025
+Plotname: Operating Point
+Flags: real
+No. Variables: 7
+No. Points:            1
+Offset:    0.0000000000000000e+00
+Command: Linear Technology Corporation LTspice
+Variables:
+	0	V(n001)	voltage
+	1	V(n002)	voltage
+	2	V(n003)	voltage
+	3	I(C1)	device_current
+	4	I(L1)	device_current
+	5	I(R1)	device_current
+	6	I(V1)	device_current
+Values:
+0		0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00

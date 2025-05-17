@@ -1,0 +1,22 @@
+Title: R1 VCC N002 777
+Date: Sat May 17 13:14:11 2025
+Plotname: Operating Point
+Flags: real
+No. Variables: 6
+No. Points:            1
+Offset:    0.0000000000000000e+00
+Command: Linear Technology Corporation LTspice
+Variables:
+	0	V(n002)	voltage
+	1	V(n003)	voltage
+	2	V(vcc)	voltage
+	3	I(C1)	device_current
+	4	I(L1)	device_current
+	5	I(V_vcc)	device_current
+Values:
+0		0.000000000000000e+00
+	0.000000000000000e+00
+	-5.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
