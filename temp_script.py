@@ -2,9 +2,10 @@
 from collections import defaultdict
 import re
 import os
-OUTPUT_DIR = "C:/Users/Owner/Desktop/my_program/kyo-pro/40_LTspice/out_put"
-NET_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/40_LTspice/py_code/input_sample.net"
- 
+OUTPUT_DIR = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data"
+NET_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/input_sample.net"
+PKG_FILE_PATH ="C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.pkg"
+CCF_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.ccf"
 def convert_net_to_ltspice(input_lines):
     # 部品ごとの {ピン番号: ノード名} マップ
     component_pins = defaultdict(dict)
@@ -35,14 +36,18 @@ def convert_net_to_ltspice(input_lines):
                 return f"N{node}"
             else:
                 return node
-        nodes = [format_node(pin_map[pin]) for pin in sorted(pin_map.keys(), key=lambda x: int(x))]
+        # nodes = [format_node(pin_map[pin]) for pin in sorted(pin_map.keys(), key=lambda x: int(x))]
+        nodes = [format_node(pin_map[pin]) for pin in sorted(pin_map.keys())]
         
         # R, L, C の場合はダミー定数 '777' を追加
-        if comp[0].upper() in {'R', 'L', 'C'}:
+        if comp[0].upper() in {'R', 'L', 'C'} and not (comp[0:3].upper() in {'LED'}):
             result_lines.append(f"{comp} {' '.join(nodes)} 777")
+        elif comp[0].upper() == 'D' and len(nodes) == 2:
+            result_lines.append(f"{comp} {' '.join(nodes)} D")  # LTspice組み込み汎用ダイオードモデル
         else:
             result_lines.append(f"{comp} {' '.join(nodes)}")
     # 電圧源ノード検出：Vを含み、かつ部品として定義されていないノード名を対象にする
+    # GND,Vccの検出また、その他ノード名がうまく検出できていない
     used_nodes = set(node_to_pins.keys())
     used_components = set(component_pins.keys())
     for node in used_nodes:
