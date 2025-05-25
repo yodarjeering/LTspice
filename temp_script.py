@@ -6,6 +6,8 @@ OUTPUT_DIR = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/output"
 NET_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.net"
 LST_FILE_PATH ="C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.lst"
 CCF_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.ccf"
+# 
+# 
 def merge_multiline_net_entries(lines):
     merged_lines = []
     current_line = ""
@@ -25,12 +27,14 @@ def merge_multiline_net_entries(lines):
     if current_line:
         merged_lines.append(current_line)
     return merged_lines
-def parse_lst_file(lines):
+# 
+# 
+def parse_lst_file_old(lines):
     ref_to_value = {}
-    current_value = ""
     current_refdes = []
     last_valid_value = ""
     for line in lines:
+        # 「区切り線やコメントなど、無視すべき行なら処理をスキップする」ためのフィルターです。
         if re.match(r'^\s*-+', line) or re.match(r'^\s*#', line):
             continue
         parts = line.strip().split()
@@ -40,124 +44,176 @@ def parse_lst_file(lines):
                 for r in current_refdes:
                     ref_to_value[r] = last_valid_value
                 current_refdes = []
+            
+            # 部品のリファレンス番号と値を取得
             refdes_part = parts[2]
             value_part = parts[-1]
             ref_list = [r.strip() for r in refdes_part.split(',') if r.strip()]
             current_refdes.extend(ref_list)
-            current_value = value_part
             last_valid_value = value_part
         elif len(parts) == 2:
             ref_to_value[parts[1]] = parts[-1]
+            #   
         elif ',' in line:
             ref_list = [r.strip() for r in line.strip().split(',') if r.strip()]
             current_refdes.extend(ref_list)
         else:
             if len(parts)==1:
                 ref_to_value[parts[0]] = last_valid_value
-                print(f'refdes_part:{refdes_part}, parts:{parts} in list')
     # 最後のバッチも忘れずに処理
     if current_refdes and last_valid_value:
         for r in current_refdes:
             ref_to_value[r] = last_valid_value
     return ref_to_value
-def convert_net_to_ltspice(input_lines):
+# 
+# ノード情報を修正する関数
+def format_node(node):
+    if re.fullmatch(r'\d+', node):
+        return f"N{node}"
+    else:
+        return node
+# 部品ごとに修正を入れる関数
+def get_prefix(comp,needs_value):
+    for prefix in sorted(needs_value.union(
+        {'CN','D','IC','LED','PAT','PC','REG','SW','T','TR','X','ZNR','ZD','MOD','JP'}
+        ), key=lambda x: -len(x)):
+        if comp.upper().startswith(prefix):
+            return prefix
+    return comp[0].upper()
+# 数字、文字が混在していてもソートできる関数
+def natural_sort_key(pin):
+    return [int(s) if s.isdigit() else s for s in re.findall(r'\d+|[A-Za-z]+', pin)]
+# 
+
+def parse_lst_file(lines):
+    ref_to_value = {}
+    ref_to_partspec = {}
+
+    current_part = ""
+    current_value = ""
+    current_refs = []
+
+    for line in lines:
+        # ヘッダーや区切り線をスキップ
+        if re.match(r'^\s*[-#]', line):
+            continue
+
+        parts = line.strip().split()
+
+        # 新しい部品定義行（4列以上ある）
+        if len(parts) >= 4:
+            # 現在のリストがあれば保存
+            if current_refs and current_part and current_value:
+                for r in current_refs:
+                    ref_to_value[r] = current_value
+                    ref_to_partspec[r] = current_part
+                current_refs = []
+
+            refdes_raw = parts[2]
+            current_part = parts[3]
+            current_value = parts[4] if len(parts) >= 5 else ""
+            current_refs = [r.strip() for r in refdes_raw.split(',') if r.strip()]
+
+        # 継続行（部品番号が複数行にまたがる）
+        elif ',' in line:
+            print(f'parts:{parts}')
+            continued_refs = [r.strip() for r in line.strip().split(',') if r.strip()]
+            current_refs.extend(continued_refs)
+
+    # 最後のブロックを保存
+    if current_refs and current_part and current_value:
+        for r in current_refs:
+            ref_to_value[r] = current_value
+            ref_to_partspec[r] = current_part
+
+    return ref_to_value, ref_to_partspec
+
+# netファイルをltspice記述に変換する関数
+def convert_net_to_ltspice(input_lines,ref_value_dict,ref_partname_dict):
     # 部品ごとの {ピン番号: ノード名} マップ
     component_pins = defaultdict(dict)
     node_to_pins = defaultdict(list)  # ノードに接続しているピン情報
-    with open(LST_FILE_PATH, encoding="utf-8") as f: # 部品の値を取得するためのファイル
-        lst_lines = f.readlines()
-    ref_value_dict = parse_lst_file(lst_lines)
-    print(f'ref_value_dict["R119"]:{ref_value_dict["R119"]}')
-    
+
+    label_nodes = set()
     for line in input_lines:
         if ';' not in line:
             continue
-        
-        # `$` ありでもなしでも処理（ネット名の抽出）
         line = line.strip()
         if line.startswith('$'):
             node_part, pin_list = line[1:].split(';', 1)
-            # print(f'node_part:{node_part},pin_list:{pin_list}') # ----------> node_part:N002,pin_list:R1^2,L1^1
         else:
             node_part, pin_list = line.split(';', 1)
-        for entry in pin_list.split(','): 
-            # print(f'entry:{entry}') # ----------> entry:R1^2
+            label_nodes.add(node_part)  # $がない＝ラベル的ノードとして扱う
+        for entry in pin_list.split(','):
             if '^' in entry:
                 comp, pin = entry.strip().split('^')
                 component_pins[comp][pin] = node_part
                 node_to_pins[node_part].append((comp, pin))
-                # print(f'comp:{comp},pin:{pin}') # ----------> comp:R1,pin:2
-    # ソートしてLTspice形式へ変換
     result_lines = []
-    voltage_sources = set()
-    
     for comp, pin_map in component_pins.items():
-        # ピン番号でソートし、対応するノードを取得
-        # "GND"を含む場合は "0
-        def format_node(node):
-            if 'GND' in node.upper():
-                return '0'
-            elif re.fullmatch(r'\d+', node):
-                return f"N{node}"
-            else:
-                return node
-            
-        def natural_sort_key(pin):
-        # 例: "2" → [2], "K" → ["K"], "A1" → ["A", 1]
-            return [int(s) if s.isdigit() else s for s in re.findall(r'\d+|[A-Za-z]+', pin)]
-        # nodes = [format_node(pin_map[pin]) for pin in sorted(pin_map.keys(), key=lambda x: int(x))]
         nodes = [format_node(pin_map[pin]) for pin in sorted(pin_map.keys(), key=natural_sort_key)]
-        
-        if comp[0].upper() in {'R', 'L', 'C'} and not (comp[0:3].upper() in {'LED'}):
+        # 定数設定が必要な部品記号セット, TBD:将来的にユーザからの入力に対応できるようにする
+        needs_value = {'C', 'L', 'R', 'RA', 'RCU'}
+        prefix = get_prefix(comp, needs_value)
+        part_name = ref_partname_dict[comp]
+
+        if prefix in needs_value:    
             value = ref_value_dict[comp]
-            result_lines.append(f"{comp} {' '.join(nodes)} {value}")
-        elif comp[0].upper() == 'D' and len(nodes) == 2:
-            result_lines.append(f"{comp} {' '.join(nodes)} D")  # LTspice組み込み汎用ダイオードモデル
+            result_lines.append(f"{comp} {' '.join(nodes)} {value} *parts_name:{part_name}")
+
+        elif prefix in {'D', 'LED', 'ZD'} and len(nodes) == 2:
+            if 'A' in pin_map and 'K' in pin_map:
+                a_node = format_node(pin_map['A'])
+                k_node = format_node(pin_map['K'])
+                result_lines.append(f"{comp} {a_node} {k_node} D **parts_name:{part_name}")
+            else:
+                # 仮に1→A、2→Kと仮定
+                a_node = format_node(pin_map.get('1', list(pin_map.values())[0]))
+                k_node = format_node(pin_map.get('2', list(pin_map.values())[1]))
+                result_lines.append(f"{comp} {a_node} {k_node} D *POLARITY_CHECK **parts_name:{part_name}")
+        # elif prefix == 'D' and len(nodes) == 2:
+        #     result_lines.append(f"{comp} {' '.join(nodes)} D")
         else:
-            result_lines.append(f"{comp} {' '.join(nodes)}")
-    # 電圧源ノード検出：Vを含み、かつ部品として定義されていないノード名を対象にする
-                
-    used_nodes = set(node_to_pins.keys())
-    used_components = set(component_pins.keys())
-    for node in used_nodes:
-        if 'V' in node.upper() and node not in used_components:
-            voltage_sources.add(node)
-    for v_node in voltage_sources:
-        result_lines.append(f"V_{v_node} 0 {v_node} DC 5")  # 仮電圧値
-    # 将来のディレクティブ検索用マーカー
+            result_lines.append(f"{comp} {' '.join(nodes)} **parts_name:{part_name}")
+    # ラベルノードの処理
+    label_nodes_list = sorted(label_nodes)
+    
+    result_lines.append("*--BEGIN_LABEL_NODES--")
+    for label_node in label_nodes_list:
+        result_lines.append(f"V_{label_node} 0 {label_node} DC 5")
+    result_lines.append("*--END_LABEL_NODES--")
     result_lines.append("* .directive_placeholder")
     result_lines.append(".backanno")
     result_lines.append(".end")
     return result_lines
+# 
+#
 def main():
-    # print(f'ref_value_dict:{ref_value_dict}')
-    
-    # 例: ファイル読み込みして処理
-    print("here")
     with open(NET_FILE_PATH, encoding="utf-8") as f:
         lines = f.readlines()
     input_lines = merge_multiline_net_entries(lines)
-    ltspice_netlist = convert_net_to_ltspice(input_lines)  # lines は入力ファイルの各行
-    os.makedirs(OUTPUT_DIR, exist_ok=True)  # すでに存在していてもエラーにならない
     
+    with open(LST_FILE_PATH, encoding="utf-8") as f:  # 部品の値を取得するためのファイル
+        lst_lines_tmp = f.readlines()
+    
+    # 「区切り線やコメントなど、無視すべき行なら処理をスキップする」ためのフィルターです。
+    # lst_linesの前処理
+    lst_lines = []
+    for line in lst_lines_tmp:
+        if 'Page' in line:
+            continue
+        lst_lines.append(line)
+    
+    ref_value_dict,ref_partname_dict = parse_lst_file(lst_lines)
+
+    ltspice_netlist = convert_net_to_ltspice(input_lines,ref_value_dict,ref_partname_dict)  # lines は入力ファイルの各行
+    os.makedirs(OUTPUT_DIR, exist_ok=True)  # すでに存在していてもエラーにならない
+
     with open(os.path.join(OUTPUT_DIR, "output_file.cir"), "w", encoding="utf-8") as f:
         for line in ltspice_netlist:
             f.write(line + "\n")
     
+# pythonのおしゃんなメイン文の実行の仕方
 if __name__ == "__main__":
     main()
-    # print(f'ref_value_dict:{ref_value_dict}')
     
-    # 例: ファイル読み込みして処理
-    with open(NET_FILE_PATH, encoding="utf-8") as f:
-        lines = f.readlines()
-    input_lines = merge_multiline_net_entries(lines)
-    ltspice_netlist = convert_net_to_ltspice(input_lines)  # lines は入力ファイルの各行
-    os.makedirs(OUTPUT_DIR, exist_ok=True)  # すでに存在していてもエラーにならない
-    
-    with open(os.path.join(OUTPUT_DIR, "output_file.cir"), "w", encoding="utf-8") as f:
-        for line in ltspice_netlist:
-            f.write(line + "\n")
-    
-if __name__ == "__main__":
-    main()
