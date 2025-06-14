@@ -2,9 +2,9 @@
 from collections import defaultdict
 import re
 import os
-OUTPUT_DIR = "C:/Users/Owner/Desktop/my_program/kyo-pro/output"
+OUTPUT_DIR = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/output"
 NET_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.net"
-LST_FILE_PATH ="C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.lst"
+LST_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.lst"
 CCF_FILE_PATH = "C:/Users/Owner/Desktop/my_program/kyo-pro/input_data/sample.ccf"
 # 
 # 
@@ -98,8 +98,6 @@ def convert_net_to_ltspice(input_lines):
         lst_lines = f.readlines()
     
     # 「区切り線やコメントなど、無視すべき行なら処理をスキップする」ためのフィルターです。
-
-
     ref_value_dict = parse_lst_file(lst_lines)
     label_nodes = set()
     for line in input_lines:
@@ -117,11 +115,8 @@ def convert_net_to_ltspice(input_lines):
                 component_pins[comp][pin] = node_part
                 node_to_pins[node_part].append((comp, pin))
     
-
-
     result_lines = []
     for comp, pin_map in component_pins.items():
-
         nodes = [format_node(pin_map[pin]) for pin in sorted(pin_map.keys(), key=natural_sort_key)]
         # 定数設定が必要な部品記号セット, TBD:将来的にユーザからの入力に対応できるようにする
         needs_value = {'C', 'L', 'R', 'RA', 'RCU'}
