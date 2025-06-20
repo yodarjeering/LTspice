@@ -1,9 +1,0 @@
-* C:\Users\Owner\Desktop\my_program\kyo-pro\40_LTspice\sample_circuit\sample.asc
-V1 N001 0 SINE(0 141 50 0 0 0 100) AC 1
-R1 N002 N001 100
-L1 N003 N002 200m
-C1 0 N003 50.66�
-.tran 1000m
-* .ac dec 100 10 1Meg
-.backanno *LTspiceのシミュレータはこの宣言以降は無視する、という意味。GUI情報の開始点という意味。
-.end *シミュレーションとして、この宣言以降は無視する。
